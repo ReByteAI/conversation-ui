@@ -4,13 +4,13 @@ import XCTest
 final class ConversationStateTests: XCTestCase {
     func testLayoutGrowthDoesNotCountAsAUserScroll() {
         var state = ConversationFollowState()
-        state.measured(distanceFromBottom: 100)
+        state.measured(atBottom: ConversationFollowState.isAtBottom(100))
         XCTAssertTrue(state.following)
         state.beganReading()
-        state.measured(distanceFromBottom: 100)
+        state.measured(atBottom: ConversationFollowState.isAtBottom(100))
         state.finishedScrolling()
         XCTAssertFalse(state.following)
-        state.measured(distanceFromBottom: 0)
+        state.measured(atBottom: ConversationFollowState.isAtBottom(0))
         state.finishedScrolling()
         XCTAssertTrue(state.following)
     }
@@ -19,13 +19,13 @@ final class ConversationStateTests: XCTestCase {
         for distance: CGFloat in [2, 10, 24, 39, 40, 80] {
             var state = ConversationFollowState()
             state.beganReading()
-            state.measured(distanceFromBottom: distance)
+            state.measured(atBottom: ConversationFollowState.isAtBottom(distance))
             state.finishedScrolling()
             XCTAssertFalse(state.following, "Must preserve reading position even just \(distance) points above the bottom")
             // A new reply/layout pass must not restart following either.
-            state.measured(distanceFromBottom: distance + 100)
+            state.measured(atBottom: ConversationFollowState.isAtBottom(distance + 100))
             XCTAssertFalse(state.following)
-            state.measured(distanceFromBottom: 0)
+            state.measured(atBottom: ConversationFollowState.isAtBottom(0))
             state.finishedScrolling()
             XCTAssertTrue(state.following)
         }
@@ -35,7 +35,7 @@ final class ConversationStateTests: XCTestCase {
         for distance: CGFloat in [-20, 0, 0.5, 1] {
             var state = ConversationFollowState()
             state.beganReading()
-            state.measured(distanceFromBottom: distance)
+            state.measured(atBottom: ConversationFollowState.isAtBottom(distance))
             state.finishedScrolling()
             XCTAssertTrue(state.following)
         }
