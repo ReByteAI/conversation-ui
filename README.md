@@ -15,7 +15,9 @@ The column uses `VStack`, not `LazyVStack`. Markdown, tables and charts change
 height after rendering; estimated lazy extents can move the viewport beyond the
 last row. One `ScrollPosition` follows the measured bottom after layout updates.
 Content growth does not count as a user scroll. Dragging pauses following; reaching
-the bottom or invoking the supplied action resumes it. No delay-based grace period
+the actual bottom (within one point of rounding) or invoking the supplied action resumes it.
+A small upward drag must stay in history after release; proximity to the tail
+does not resume following. No delay-based grace period
 or simultaneous top-ID position competes with bottom following.
 
 Pass stable message IDs and selection state. Supply `scrollRequest` when a composer

@@ -30,7 +30,10 @@ public struct ConversationScrollStatus {
 struct ConversationFollowState {
     private(set) var following = true
     private(set) var atBottom = true
-    mutating func measured(atBottom: Bool) { self.atBottom = atBottom }
+    mutating func measured(distanceFromBottom: CGFloat) {
+        // Tolerate layout rounding, not a reader who stopped slightly above the tail.
+        atBottom = distanceFromBottom <= 1
+    }
     mutating func beganReading() { following = false }
     mutating func finishedScrolling() { following = atBottom }
     mutating func followLatest() { following = true }
@@ -40,7 +43,7 @@ private struct ConversationGeometry: Equatable {
     let content: CGSize
     let container: CGSize
     let bottomInset: CGFloat
-    let atBottom: Bool
+    let distanceFromBottom: CGFloat
 }
 
 /// A measured conversation column shared by Impo and Rebyte.
@@ -96,10 +99,10 @@ public struct ConversationScrollView<Content: View, Accessory: View>: View {
         .onScrollGeometryChange(for: ConversationGeometry.self) { geometry in
             ConversationGeometry(content: geometry.contentSize, container: geometry.containerSize,
                 bottomInset: geometry.contentInsets.bottom,
-                atBottom: geometry.contentSize.height - geometry.visibleRect.maxY <= 40)
+                distanceFromBottom: geometry.contentSize.height - geometry.visibleRect.maxY)
         } action: { _, geometry in
-            state.measured(atBottom: geometry.atBottom)
-            if geometry.atBottom { unread.markRead() }
+            state.measured(distanceFromBottom: geometry.distanceFromBottom)
+            if state.atBottom { unread.markRead() }
             scheduleFollow()
         }
         .onScrollPhaseChange { old, new in

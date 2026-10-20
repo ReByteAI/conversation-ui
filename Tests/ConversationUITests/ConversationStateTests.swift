@@ -4,15 +4,41 @@ import XCTest
 final class ConversationStateTests: XCTestCase {
     func testLayoutGrowthDoesNotCountAsAUserScroll() {
         var state = ConversationFollowState()
-        state.measured(atBottom: false)
+        state.measured(distanceFromBottom: 100)
         XCTAssertTrue(state.following)
         state.beganReading()
-        state.measured(atBottom: false)
+        state.measured(distanceFromBottom: 100)
         state.finishedScrolling()
         XCTAssertFalse(state.following)
-        state.measured(atBottom: true)
+        state.measured(distanceFromBottom: 0)
         state.finishedScrolling()
         XCTAssertTrue(state.following)
+    }
+
+    func testSmallUpwardScrollDoesNotResumeFollowingOnRelease() {
+        for distance: CGFloat in [2, 10, 24, 39, 40, 80] {
+            var state = ConversationFollowState()
+            state.beganReading()
+            state.measured(distanceFromBottom: distance)
+            state.finishedScrolling()
+            XCTAssertFalse(state.following, "Must preserve reading position even just \(distance) points above the bottom")
+            // A new reply/layout pass must not restart following either.
+            state.measured(distanceFromBottom: distance + 100)
+            XCTAssertFalse(state.following)
+            state.measured(distanceFromBottom: 0)
+            state.finishedScrolling()
+            XCTAssertTrue(state.following)
+        }
+    }
+
+    func testBottomRoundingAndRubberBandingStillResumeFollowing() {
+        for distance: CGFloat in [-20, 0, 0.5, 1] {
+            var state = ConversationFollowState()
+            state.beganReading()
+            state.measured(distanceFromBottom: distance)
+            state.finishedScrolling()
+            XCTAssertTrue(state.following)
+        }
     }
 
     func testExplicitReturnResumesFollowing() {
