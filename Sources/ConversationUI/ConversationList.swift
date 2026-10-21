@@ -16,6 +16,14 @@ public struct ConversationListRow: Identifiable {
     }
 }
 
+/// A request to show `id` at the top of the list instead of following the latest row.
+/// A new `request` value asks again; the list waits until a row with that id exists.
+public struct ConversationListReveal: Equatable {
+    public let id: String
+    public let request: Int
+    public init(id: String, request: Int) { self.id = id; self.request = request }
+}
+
 /// A conversation column that keeps only the rows near the viewport alive.
 ///
 /// The design follows Telegram's chat list: every row has an exact height once it
@@ -32,6 +40,8 @@ public struct ConversationList<Accessory: View>: View {
     private let padding: EdgeInsets
     private let maximumWidth: CGFloat
     private let onReachTop: () -> Void
+    private let reveal: ConversationListReveal?
+    private let onVisibleRows: ([String]) -> Void
     private let accessory: (ConversationScrollStatus, @escaping () -> Void) -> Accessory
     @State private var status = ConversationScrollStatus(isFollowing: true, isAtBottom: true, unreadCount: 0)
     @State private var followRequests = 0
@@ -39,6 +49,7 @@ public struct ConversationList<Accessory: View>: View {
     public init(rows: [ConversationListRow], enabled: Bool = true, isInteracting: Bool = false,
                 scrollRequest: Int = 0, spacing: CGFloat = 0, padding: EdgeInsets = EdgeInsets(),
                 maximumWidth: CGFloat = .infinity, onReachTop: @escaping () -> Void = {},
+                reveal: ConversationListReveal? = nil, onVisibleRows: @escaping ([String]) -> Void = { _ in },
                 @ViewBuilder accessory: @escaping (ConversationScrollStatus, @escaping () -> Void) -> Accessory) {
         self.rows = rows
         self.enabled = enabled
@@ -48,13 +59,15 @@ public struct ConversationList<Accessory: View>: View {
         self.padding = padding
         self.maximumWidth = maximumWidth
         self.onReachTop = onReachTop
+        self.reveal = reveal
+        self.onVisibleRows = onVisibleRows
         self.accessory = accessory
     }
 
     public var body: some View {
         ConversationListRepresentable(rows: rows, enabled: enabled, isInteracting: isInteracting,
             followRequest: scrollRequest + followRequests, spacing: spacing, padding: padding,
-            maximumWidth: maximumWidth, onReachTop: onReachTop) { status = $0 }
+            maximumWidth: maximumWidth, onReachTop: onReachTop, reveal: reveal, onVisibleRows: onVisibleRows) { status = $0 }
             .overlay(alignment: .bottom) { accessory(status) { followRequests += 1 } }
     }
 }
@@ -68,6 +81,8 @@ private struct ConversationListRepresentable: UIViewControllerRepresentable {
     let padding: EdgeInsets
     let maximumWidth: CGFloat
     let onReachTop: () -> Void
+    let reveal: ConversationListReveal?
+    let onVisibleRows: ([String]) -> Void
     let onStatus: (ConversationScrollStatus) -> Void
 
     func makeUIViewController(context: Context) -> ConversationListController { ConversationListController() }
@@ -75,9 +90,10 @@ private struct ConversationListRepresentable: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: ConversationListController, context: Context) {
         controller.onReachTop = onReachTop
         controller.onStatus = onStatus
+        controller.onVisibleRows = onVisibleRows
         controller.update(rows: rows, environment: context.environment, style: .init(spacing: spacing,
             padding: padding, maximumWidth: maximumWidth), enabled: enabled, isInteracting: isInteracting,
-            followRequest: followRequest)
+            followRequest: followRequest, reveal: reveal)
     }
 }
 
@@ -125,6 +141,7 @@ private struct ConversationListRowRoot: View {
 
     var onReachTop: () -> Void = {}
     var onStatus: (ConversationScrollStatus) -> Void = { _ in }
+    var onVisibleRows: ([String]) -> Void = { _ in }
 
     private let scroll = UIScrollView()
     private var geometry = ConversationListGeometry()
@@ -136,6 +153,8 @@ private struct ConversationListRowRoot: View {
     private var enabled = true
     private var isInteracting = false
     private var followRequest = 0
+    private var revealed: Int?
+    private var visibleRows: [String] = []
     private var follow = ConversationFollowState()
     private var unread = ConversationUnreadTracker()
     private var reported: ConversationScrollStatus?
@@ -159,8 +178,8 @@ private struct ConversationListRowRoot: View {
     // MARK: Inputs
 
     func update(rows: [ConversationListRow], environment: EnvironmentValues, style: Style, enabled: Bool,
-                isInteracting: Bool, followRequest: Int) {
-        let anchor = currentAnchor()
+                isInteracting: Bool, followRequest: Int, reveal: ConversationListReveal? = nil) {
+        var anchor = currentAnchor()
         self.environment = environment
         if self.style != style {
             self.style = style
@@ -189,6 +208,13 @@ private struct ConversationListRowRoot: View {
             self.followRequest = followRequest
             follow.followLatest()
             unread.markRead()
+        }
+        if let reveal, reveal.request != revealed, ids.contains(reveal.id) {
+            // Stop following and read from the requested row, as if the reader had scrolled there.
+            revealed = reveal.request
+            follow.beganReading()
+            follow.measured(atBottom: false)
+            anchor = .row(id: reveal.id, offset: 0)
         }
         // Following may resume in this update (selection ended, search cleared, a follow request).
         relayout(anchor: canFollow ? .bottom : anchor)
@@ -407,6 +433,13 @@ private struct ConversationListRowRoot: View {
     }
 
     private func reportStatus() {
+        // Rows placed in this pass only; before the first layout there are none.
+        let visible = geometry.tops.count == geometry.ids.count ? geometry.range(minY: offset, maxY: offset + viewport).map { geometry.ids[$0] } : []
+        if visible != visibleRows {
+            visibleRows = visible
+            let onVisibleRows = onVisibleRows
+            DispatchQueue.main.async { onVisibleRows(visible) }
+        }
         if isAtBottom, follow.following { unread.markRead() }
         let status = ConversationScrollStatus(isFollowing: follow.following, isAtBottom: isAtBottom,
             unreadCount: unread.unread.count)
