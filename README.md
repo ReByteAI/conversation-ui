@@ -8,8 +8,19 @@ and update their dependency revisions together.
 
 `ConversationList` owns row placement, bottom following, user-scroll state,
 selection pauses and unread counts. Each app supplies its rows (`ConversationListRow`),
-its composer and the return-to-latest control. Message rendering and product styling
-remain outside this package.
+its composer and the return-to-latest control. Product styling remains outside this
+package.
+
+`ResponseText` (iOS only) is the response renderer both apps show replies with:
+Markdown through MD4C, math, tables, native selection and message actions. Each app
+applies its own theme and picks its message-menu style; see
+[Sources/ResponseText/README.md](Sources/ResponseText/README.md) and
+[UPSTREAM.md](Sources/ResponseText/UPSTREAM.md). It needs UIKit, so run this package's
+tests on an iOS simulator:
+
+```sh
+xcodebuild test -scheme ConversationUI-Package -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+```
 
 The design follows Telegram's chat list (iOS 18+ only; macOS has no list yet):
 
@@ -36,7 +47,8 @@ period.
 
 Validation:
 
-- Run `swift test` in this repository for geometry, follow state and unread counting.
+- Run the package tests on an iOS simulator (command above): geometry, follow state,
+  unread counting and the response renderer.
 - In the Impo checkout: `IMPO_IOS_TEST_CLASS=InstantNativeTests/ConversationScrollingTests npm run test:ios:app -- --simulator <UDID>` — hosted-view checks for append/resize, tab restoration, selection, history paging, prepend and resize anchoring, and a 3,000-row list that keeps fewer than 60 rows alive.
 - In the Impo checkout, a Debug build launched with `--scroll-soak <file>` scrolls the main chat through its whole history and back, writing the memory footprint every half second.
 - Build Rebyte after resolving its pinned remote dependency.

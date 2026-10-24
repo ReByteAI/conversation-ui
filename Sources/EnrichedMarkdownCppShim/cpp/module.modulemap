@@ -1,0 +1,4 @@
+module EnrichedMarkdownCppShim {
+  header "SwiftParserCAPI.h"
+  export *
+}
