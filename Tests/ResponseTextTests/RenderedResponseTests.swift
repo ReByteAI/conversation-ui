@@ -128,3 +128,34 @@ import UIKit
         XCTFail("Renderer did not publish the expected document")
     }
 }
+
+@MainActor final class DisplayMathLineTests: XCTestCase {
+    /// A display equation whose lines look like Markdown block syntax (a lone `=`
+    /// is a setext underline) is still one formula.
+    func testDisplayMathLinesThatLookLikeBlockSyntaxStayOneFormula() {
+        let source = """
+        Average:
+
+        $$
+        \\mathbb E_{z\\sim q}
+        \\left[\\frac{p(x,z)}{q(z)}\\right]
+        =
+        \\sum_z p(x,z)
+        - 1
+        =
+        p(x)
+        $$
+
+        Done.
+        """
+        let text = MarkdownRenderer.renderLaTeX(ResponseMath(source).renderedMarkdown, config: .baseline())
+        var formulas: [String] = []
+        text.enumerateAttribute(.attachment, in: NSRange(location: 0, length: text.length)) { value, _, _ in
+            if let math = value as? MathAttachment { formulas.append(math.latex) }
+        }
+        XCTAssertEqual(formulas.count, 1, text.string)
+        XCTAssertTrue(formulas.first?.contains("p(x)") ?? false, formulas.description)
+        XCTAssertFalse(text.string.contains("\\sum"), text.string)
+        XCTAssertEqual(ResponseMath.singleLine("a % note\n= 50\\% b"), "a  = 50\\% b")
+    }
+}

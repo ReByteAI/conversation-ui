@@ -68,7 +68,8 @@ public struct ResponseMath {
                         if end == content || (open == "$" && (chars[end - 1].isWhitespace || (end + 1 < chars.count && chars[end + 1].isNumber))) { break }
                         let token = "\(prefix)\(equations.count)END"
                         equations[token] = Equation(source: String(chars[i..<(end + close.count)]), display: display, complete: true)
-                        rendered += (display ? "$$" : "$") + String(chars[content..<end]) + (display ? "$$" : "$")
+                        let body = String(chars[content..<end])
+                        rendered += display ? "$$" + Self.singleLine(body) + "$$" : "$" + body + "$"
                         output += token; i = end + close.count; consumed = true; break
                     }
                     end += 1
@@ -89,6 +90,22 @@ public struct ResponseMath {
         renderedMarkdown = rendered
         protected = output
         self.equations = equations
+    }
+
+    /// The markdown parser reads display math as an inline span, so a line inside it
+    /// such as a lone `=` (a setext underline) or `- x` would split the formula into
+    /// blocks. TeX reads a newline as a space; comments are dropped first so joining
+    /// the lines cannot comment out what follows.
+    static func singleLine(_ body: String) -> String {
+        body.components(separatedBy: "\n").map { line in
+            var kept = "", backslashes = 0
+            for char in line {
+                if char == "%" && backslashes.isMultiple(of: 2) { break }
+                backslashes = char == "\\" ? backslashes + 1 : 0
+                kept.append(char)
+            }
+            return kept
+        }.joined(separator: " ")
     }
 
     public func hasIncomplete(_ text: String) -> Bool {
